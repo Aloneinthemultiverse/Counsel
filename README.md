@@ -131,6 +131,74 @@ counsel/
 
 ---
 
+## Inside the distillation — how it digests a person
+
+A single person can have hundreds of messy Slack messages. You can't just hand them all to one
+model and ask "who is this person?" — it's too much, too noisy, and the result is shallow. So
+Counsel uses a **fan-out: many readers, then five editors.**
+
+### Step 1 — Chunk
+The person's substantive messages are split into **chunks** (~100 messages each). Chunking is what
+lets the pipeline handle *any* volume — a power-user with thousands of messages just becomes more
+chunks; nothing is truncated.
+
+### Step 2 — Workers read each chunk (the note-takers)
+Every chunk goes to a **worker** (one LLM pass). The worker doesn't write the profile — it only
+takes **notes**. It reads the chunk through **all five facets at once** and emits structured findings:
+
+```json
+[
+  {"facet": "priorities", "claim": "Pushes for shipping fast over polish",
+   "evidence": [{"channel": "product", "date": "2024-03-04"}]},
+  {"facet": "decisions",  "claim": "Won't greenlight a build without a validated spec",
+   "evidence": [{"channel": "eng", "date": "2024-03-04"}]}
+]
+```
+
+Each finding is a one-line claim **plus a pointer to where it was said** (channel + date) — so every
+claim stays traceable. Workers are:
+- **name-anchored** — told the subject is a specific human ("extract evidence about *Maya*"), so the
+  model never accidentally describes itself or an AI instead of the person;
+- **JSON-robust** — up to 3 retries with salvage parsing if the model returns malformed JSON;
+- **quote-safe** — instructed to describe patterns in indirect prose, never paste raw message text.
+
+### Step 3 — The five facets (the lenses every worker uses)
+| # | Facet | What it captures |
+|---|---|---|
+| 1 | **Strategic priorities & recurring themes** | what they push for / dismiss repeatedly |
+| 2 | **Specific opinions & positions** | concrete stances they champion or oppose |
+| 3 | **Decision-making patterns** | *how* they reason — the questions they ask, the bar they set |
+| 4 | **Domain knowledge** | topics where they bring real working knowledge |
+| 5 | **Network & operational context** | who they work with, projects, external entities |
+
+### Step 4 — Five reducers digest the notes (the editors)
+Now there's a big pile of notes from all the workers. **One reducer per facet** (five editors) takes
+over. Each reducer:
+1. receives **every worker's notes tagged with its facet** (e.g. the "decisions" editor gets all
+   decision-pattern findings from every chunk),
+2. **dedupes** — the same claim seen across many chunks becomes one claim with merged evidence (and
+   "seen many times = a pattern; once = a hint"),
+3. **synthesizes** a clean Markdown section, keeping a `[#channel, date]` citation on each claim.
+
+So the workers spread *wide* (cover every message), and the five reducers go *deep* (one polished,
+non-redundant section per facet).
+
+### Step 5 — Assemble the persona
+The orchestrator stitches the five sections together and adds:
+- **At a glance** — a 2–4 sentence synthesis across all facets (this becomes the advisor's bank
+  *mission* — its worldview),
+- **Known gaps** — topics the messages are silent on (so the advisor is honest about what it doesn't know),
+- **frontmatter** — name, message/channel counts, method, timestamp.
+
+The result is `personas/<slug>.md`. **`tools/quality_check.py`** then scores it — verbatim-leak sweep,
+citation density, facet coverage, length — so you can see the persona is grounded, not invented.
+
+> **In one line:** chunk the messages → many workers take per-facet notes with receipts → five
+> reducers dedupe and write one section each → assemble into a cited persona → seed it into a
+> Hindsight bank.
+
+---
+
 ## Functionality (every feature)
 
 ### Build the board
