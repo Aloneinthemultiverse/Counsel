@@ -199,6 +199,68 @@ citation density, facet coverage, length — so you can see the persona is groun
 
 ---
 
+## Inside memory — the read / write flow
+
+Once an advisor has a bank, every interaction either **writes** to memory or **reads** from it.
+Here's exactly what happens.
+
+### Writing memory (retain)
+Three things get retained, and Hindsight **extracts** each into multiple typed units (a paragraph
+becomes many `observation` / `experience` / `world` facts):
+
+| When | What's written | Where |
+|---|---|---|
+| At build (`board.init`) | the distilled persona facets (the seed identity) | the advisor's bank |
+| Every reply (`stamp`) | "On <date> the user asked … I advised …" | the advisor's bank |
+| Every reply (`board_write`) | "<Advisor> said: …" | the shared **boardroom** |
+| You state a decision (`remember_from_message`) | "DECISION by the user: …" | **every** bank + boardroom |
+
+The decision-detection is itself a tiny LLM classification: each message you send is checked — *does
+this state a commitment?* If yes, it's retained as a decision (this is what makes the contradiction
+catch feel emergent — you never press "save").
+
+### Reading memory (recall) — what happens before an advisor speaks
+```
+advisor_take() / chat_reply():
+   mem_own   = recall(advisor_bank, query)          # what *I* know & have said
+   mem_board = recall(BOARDROOM,   query)            # decisions + what others said
+   prompt    = persona(mission) + mem_own + mem_board + running_thread + question
+   reply     = LLM(prompt)
+```
+- **`recall` uses TEMPR** — it blends semantic (meaning), BM25 (exact keywords), graph (entity
+  links), and temporal (recency) to fetch only the relevant memories, not the whole history. That's
+  what keeps it grounded *and* scalable as a bank grows to hundreds of units.
+- **Two context layers feed every reply:** the **running thread** (short-term, this conversation,
+  held in `web.py`) and the **banks** (long-term, across all sessions, in Hindsight). The thread is
+  why follow-ups are coherent; the banks are why it remembers last week.
+- Recalling the **boardroom** is what lets advisors reference *each other* ("building on Raj's
+  point…") and catch you contradicting a decision the *group* recorded.
+
+### Reasoning over memory (reflect)
+Two features don't just recall — they ask Hindsight to **reason**:
+- **Profile** → `reflect(boardroom, "portrait of the user…")` — Hindsight finds the relevant
+  memories itself and synthesizes a portrait.
+- **Evolve** → `reflect(advisor_bank, "has your view shifted?…")` — reflection runs through the
+  bank's *mission/disposition*, so the advisor's worldview shapes the answer; the result rewrites
+  its persona + bank mission.
+
+### Self-maintenance (consolidation / freshness)
+Hindsight runs this on its own in the background: it **dedups** overlapping facts, tracks
+**evidence/proof counts**, and computes a **freshness trend** (strengthening → stable → weakening →
+stale) so old, contradicted, or unused memories decay. Counsel doesn't manage any of this — it's why
+the memory *self-improves* the more you use it.
+
+### Provenance (who-told-whom)
+`/api/graph` reads the boardroom's memories and counts, per advisor, how many points they
+**contributed** vs how many are **cited in decisions** — turning the collective memory into a flow
+graph: advisor → boardroom → decision.
+
+> **In one line:** writes go to a per-advisor bank + a shared boardroom (auto-extracted into typed
+> facts); reads use TEMPR recall to pull only what's relevant; `reflect` reasons over it for the
+> profile and evolution; Hindsight consolidates and ages everything automatically.
+
+---
+
 ## Functionality (every feature)
 
 ### Build the board
