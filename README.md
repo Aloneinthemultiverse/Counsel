@@ -12,6 +12,8 @@ a **society of agents that remember each other** — a shared "boardroom" memory
 who said what, flag contradictions against the collective record, and trace whose advice drove a
 decision.
 
+📖 **Read the deep dive:** [I gave a room of AI agents one shared memory — and they started arguing with each other](https://medium.com/@aerospacesujitnarrayan/i-gave-a-room-of-ai-agents-one-shared-memory-and-they-started-arguing-with-each-other-b4da304ca893)
+
 ---
 
 ## Table of contents
